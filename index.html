@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aslanov Chat: Admin Edition</title>
+    <meta name="theme-color" content="#008069">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23008069'%3E%3Cpath d='M12 2C6.477 2 2 6.477 2 12c0 1.821.487 3.53 1.338 5L2.5 21.5l4.5-.838A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 2c4.418 0 8 3.582 8 8 0 4.418-3.582 8-8 8a7.96 7.96 0 0 1-3.398-.759l-2.957.55.786-2.827A7.96 7.96 0 0 1 4 12c0-4.418 3.582-8 8-8z'/%3E%3C/svg%3E">
+
+    <style>
+        /* === ТЕМЫ === */
+        :root {
+            --primary: #008069; --bg-body: #d1d7db; --bg-chat: #efeae2; --white: #ffffff;
+            --panel-bg: #f0f2f5; --msg-out: #d9fdd3; --msg-in: #ffffff;
+            --text-main: #111b21; --text-sec: #667781; --border: #e9edef;
+        }
+        [data-theme="dark"] {
+            --primary: #00a884; --bg-body: #090e11; --bg-chat: #0b141a; --white: #111b21;
+            --panel-bg: #202c33; --msg-out: #005c4b; --msg-in: #202c33;
+            --text-main: #e9edef; --text-sec: #8696a0; --border: #222e35;
+        }
+
+        body { font-family: -apple-system, sans-serif; background: var(--bg-body); color: var(--text-main); margin: 0; height: 100vh; display: flex; justify-content: center; }
+        #app { display: flex; width: 100%; height: 100vh; max-width: 1600px; background: var(--white); position: relative; overflow: hidden; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+
+        /* LOADER */
+        #loader { position: fixed; inset: 0; background: var(--white); z-index: 5000; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+        .spinner { border: 4px solid var(--panel-bg); border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* UI */
+        .sidebar { width: 300px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--white); flex-shrink: 0; z-index: 10; transition: transform 0.3s; }
+        .chat-area { flex: 1; display: flex; flex-direction: column; background-color: var(--bg-chat); position: relative; }
+        .chat-area::before { content: ""; position: absolute; inset: 0; opacity: 0.06; pointer-events: none; background-image: url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png"); background-repeat: repeat; }
+        [data-theme="dark"] .chat-area::before { opacity: 0.04; filter: invert(1); }
+
+        @media (max-width: 768px) {
+            .sidebar { width: 100%; position: absolute; height: 100%; }
+            .chat-area { width: 100%; position: absolute; height: 100%; z-index: 1; }
+            body.chat-open .sidebar { transform: translateX(-100%); }
+            body.chat-open .chat-area { z-index: 20; }
+            #btnBack { display: block !important; }
+        }
+        #btnBack { display: none; font-size: 24px; background: none; border: none; color: var(--text-sec); padding: 0 10px; cursor: pointer;}
+
+        .header { background: var(--panel-bg); height: 70px; padding: 0 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); z-index: 2; }
+        
+        /* АВАТАР */
+        .avatar { width: 45px; height: 45px; background: #ccc; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0; background-size: cover; background-position: center; position: relative; cursor: pointer; }
+        .avatar.admin::after { content: "👑"; position: absolute; top: -5px; right: -5px; font-size: 16px; background: gold; border-radius: 50%; width: 20px; height: 20px; display:flex; justify-content:center; align-items:center; border:1px solid white;}
+
+        .contact-item { display: flex; align-items: center; padding: 12px 15px; cursor: pointer; border-bottom: 1px solid var(--border); }
+        .contact-item:hover { background: var(--panel-bg); }
+        .contact-info { margin-left: 15px; flex: 1; }
+        .contact-name { font-weight: 500; font-size: 16px; color: var(--text-main); }
+        
+        .messages-box { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; z-index: 2; }
+        .msg { max-width: 75%; padding: 6px 10px; border-radius: 8px; font-size: 14.2px; line-height: 19px; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); word-wrap: break-word; color: var(--text-main); position: relative; }
+        .msg.mine { align-self: flex-end; background: var(--msg-out); border-radius: 8px 0 8px 8px; cursor: pointer; }
+        .msg.theirs { align-self: flex-start; background: var(--msg-in); border-radius: 0 8px 8px 8px; }
+        .msg img { max-width: 250px; border-radius: 6px; display: block; margin-bottom: 5px; cursor: pointer; }
+        
+        .input-area { background: var(--panel-bg); padding: 8px; display: flex; align-items: center; gap: 8px; z-index: 2; }
+        .input-area input { flex: 1; padding: 12px; border-radius: 20px; border: none; outline: none; font-size: 15px; background: var(--white); color: var(--text-main); }
+        .btn-icon { background: none; border: none; font-size: 24px; color: var(--text-sec); padding: 5px; cursor: pointer; }
+
+        /* AUTH & MODALS */
+        #authBox, .modal { position: fixed; inset: 0; background: var(--bg-body); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
+        .modal { background: rgba(0,0,0,0.5); z-index: 2000; }
+        .card { background: var(--white); padding: 30px; border-radius: 10px; width: 85%; max-width: 320px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .card input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid var(--border); border-radius: 5px; background: var(--panel-bg); color: var(--text-main); box-sizing: border-box; }
+        .card button { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<input type="file" id="avatarInput" accept="image/*" style="display:none">
+<input type="file" id="chatFileInput" accept="image/*" style="display:none">
+
+<div id="loader"><div class="spinner"></div><p style="margin-top:10px">Загрузка...</p></div>
+
+<div id="authBox">
+    <div class="card">
+        <h2 style="color:var(--primary);margin-top:0;">Aslanov Chat</h2>
+        <input id="email" type="email" placeholder="Email">
+        <input id="pass" type="password" placeholder="Пароль">
+        <button id="btnLogin">Войти</button>
+        <button id="btnReg" style="background:#ccc; color:#333; margin-top:10px;">Регистрация</button>
+    </div>
+</div>
+
+<div id="nickModal" class="modal">
+    <div class="card">
+        <h3>Придумай Никнейм</h3>
+        <p style="font-size:12px; color:gray">Друзья будут искать тебя по нему (например @boss)</p>
+        <input id="nickInput" placeholder="Никнейм (без @)">
+        <button onclick="saveNickname()">Сохранить</button>
+    </div>
+</div>
+
+<div id="app" style="display:none">
+    <div class="sidebar">
+        <div class="header">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div class="avatar" id="myAvatar" title="Нажми, чтобы сменить фото">Я</div>
+                <div style="display:flex; flex-direction:column;">
+                    <span id="myNameDisplay" style="font-weight:bold;">...</span>
+                    <span id="myNickDisplay" style="font-size:12px; color:var(--text-sec)">@...</span>
+                </div>
+            </div>
+            <div style="display:flex;">
+                <button class="btn-icon" onclick="toggleTheme()">🌗</button>
+                <button class="btn-icon" onclick="showAddModal()">➕</button>
+                <button class="btn-icon" onclick="if(confirm('Выйти?')) doLogout()">🚪</button>
+            </div>
+        </div>
+        <div id="contactsList" style="flex:1; overflow-y:auto;"></div>
+    </div>
+
+    <div class="chat-area">
+        <div class="header" id="chatHeader" style="display:none;">
+            <div style="display:flex; align-items:center;">
+                <button id="btnBack" onclick="closeChat()">❮</button> 
+                <div class="avatar" id="headerAvatar" style="margin-right:10px; width:35px; height:35px; font-size:14px;"></div>
+                <div>
+                    <div id="headerName" style="font-weight:500;">Имя</div>
+                    <div id="headerStatus" style="font-size:12px; color:var(--primary);"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="noChatStub" style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-sec);">
+            <p>Выберите чат или нажмите ➕</p>
+        </div>
+
+        <div id="messagesList" class="messages-box" style="display:none;"></div>
+
+        <div id="inputBox" class="input-area" style="display:none;">
+            <button class="btn-icon" onclick="document.getElementById('chatFileInput').click()">📎</button>
+            <input id="msgInput" placeholder="Сообщение..." autocomplete="off">
+            <button class="btn-icon" id="sendBtn" style="color:var(--primary)">➤</button>
+        </div>
+    </div>
+</div>
+
+<div id="addModal" class="modal">
+    <div class="card">
+        <h3>Добавить друга</h3>
+        <p style="font-size:12px; color:gray">Введи UID, Никнейм (@name) или <b>код Админа</b></p>
+        <input id="searchInp" placeholder="UID или @никнейм">
+        <button onclick="handleAddFriend()">Добавить / Ввести код</button>
+        <button onclick="closeModal()" style="background:none; color:gray; margin-top:5px;">Отмена</button>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, setDoc, doc, deleteDoc, updateDoc, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const IMGBB_API_KEY = "18e68e76fd52faa2debe47783c906fde"; 
+    const firebaseConfig = {
+        apiKey: "AIzaSyCq4IuYRYx4a78u5uf4cc-WrpdWks3BLrg",
+        authDomain: "aslanovchat-e4964.firebaseapp.com",
+        projectId: "aslanovchat-e4964",
+        storageBucket: "aslanovchat-e4964.appspot.com",
+        messagingSenderId: "110257571643",
+        appId: "1:110257571643:web:6dd1529642fc6b665e991e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    setPersistence(auth, browserLocalPersistence).catch(console.error);
+
+    let currentUser = null;
+    let isAdmin = false; // Статус админа
+    let currentChatId = null;
+    let unsubMsgs = null;
+
+    // === UI ===
+    const els = { loader: document.getElementById('loader'), auth: document.getElementById('authBox'), app: document.getElementById('app'), contacts: document.getElementById('contactsList'), msgs: document.getElementById('messagesList'), inp: document.getElementById('msgInput') };
+
+    // === SOUND ===
+    const notifSound = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
+
+    // === AUTH ===
+    document.getElementById('btnLogin').onclick = () => signInWithEmailAndPassword(auth, email.value, pass.value).catch(e => alert(e.message));
+    document.getElementById('btnReg').onclick = async () => {
+        try {
+            const c = await createUserWithEmailAndPassword(auth, email.value, pass.value);
+            await setDoc(doc(db, "users", c.user.uid), { email: email.value, uid: c.user.uid, isAdmin: false });
+        } catch(e) { alert(e.message); }
+    };
+    window.doLogout = () => signOut(auth);
+
+    onAuthStateChanged(auth, async user => {
+        els.loader.style.display = 'none';
+        if(user) {
+            currentUser = user;
+            els.auth.style.display = 'none';
+            els.app.style.display = 'flex';
+            
+            // Загрузка профиля
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            const userData = userDoc.data();
+            
+            // Проверка на админа
+            isAdmin = userData.isAdmin || false;
+            updateProfileUI(userData);
+
+            // Если нет ника
+            if(!userData.nickname) document.getElementById('nickModal').style.display = 'flex';
+
+            loadContacts();
+        } else {
+            currentUser = null;
+            els.auth.style.display = 'flex';
+            els.app.style.display = 'none';
+        }
+    });
+
+    function updateProfileUI(data) {
+        const av = document.getElementById('myAvatar');
+        av.className = isAdmin ? "avatar admin" : "avatar";
+        if(data.photoURL) {
+            av.style.backgroundImage = `url(${data.photoURL})`;
+            av.innerText = "";
+        } else {
+            av.style.backgroundImage = "none";
+            av.innerText = data.email[0].toUpperCase();
+        }
+        document.getElementById('myNameDisplay').innerText = data.email.split('@')[0];
+        document.getElementById('myNickDisplay').innerText = data.nickname ? "@"+data.nickname : "нет ника";
+    }
+
+    // === AVATAR UPLOAD ===
+    document.getElementById('myAvatar').onclick = () => document.getElementById('avatarInput').click();
+    document.getElementById('avatarInput').onchange = async (e) => uploadToImgBB(e.target.files[0], async (url) => {
+        await updateDoc(doc(db, "users", currentUser.uid), { photoURL: url });
+        alert("Фото обновлено!");
+        location.reload();
+    });
+
+    // === NICKNAME ===
+    window.saveNickname = async () => {
+        const nick = document.getElementById('nickInput').value.trim().toLowerCase();
+        if(nick) {
+            // Проверка занятости (простая)
+            const q = query(collection(db, "users"), where("nickname", "==", nick));
+            const snap = await getDocs(q);
+            if(!snap.empty) return alert("Ник занят!");
+            
+            await updateDoc(doc(db, "users", currentUser.uid), { nickname: nick });
+            document.getElementById('nickModal').style.display = 'none';
+            alert("Ник сохранен!");
+            location.reload();
+        }
+    };
+
+    // === ADD FRIEND / ADMIN CODE ===
+    window.showAddModal = () => document.getElementById('addModal').style.display = 'flex';
+    window.closeModal = () => document.getElementById('addModal').style.display = 'none';
+
+    window.handleAddFriend = async () => {
+        const val = document.getElementById('searchInp').value.trim();
+        if(!val) return;
+
+        // 1. ПРОВЕРКА НА АДМИНА
+        if(val === "Huseyn8181") {
+            await updateDoc(doc(db, "users", currentUser.uid), { isAdmin: true });
+            alert("👑 РЕЖИМ БОГА АКТИВИРОВАН! Ты теперь Админ.");
+            location.reload();
+            return;
+        }
+
+        // 2. ПОИСК ДРУГА
+        let targetUid = null;
+        let targetName = "Друг";
+
+        if(val.startsWith("@")) {
+            // Поиск по нику
+            const nick = val.substring(1).toLowerCase();
+            const q = query(collection(db, "users"), where("nickname", "==", nick));
+            const snap = await getDocs(q);
+            if(snap.empty) return alert("Пользователь не найден");
+            const d = snap.docs[0].data();
+            targetUid = d.uid;
+            targetName = d.email.split('@')[0];
+        } else {
+            // Поиск по UID
+            targetUid = val;
+        }
+
+        if(targetUid) {
+            await setDoc(doc(db, "users", currentUser.uid, "contacts", targetUid), { uid: targetUid, name: targetName, time: Date.now() });
+            closeModal();
+            alert("Контакт добавлен!");
+        }
+    };
+
+    // === CONTACTS & CHAT ===
+    function loadContacts() {
+        onSnapshot(query(collection(db, "users", currentUser.uid, "contacts"), orderBy("time", "desc")), snap => {
+            els.contacts.innerHTML = "";
+            snap.forEach(d => {
+                const c = d.data();
+                const div = document.createElement('div');
+                div.className = "contact-item";
+                div.innerHTML = `<div class="avatar">${c.name[0]}</div>
+                    <div class="contact-info"><div class="contact-name">${c.name}</div></div>`;
+                
+                // Подгрузка реального фото друга
+                getDoc(doc(db, "users", c.uid)).then(uSnap => {
+                    if(uSnap.exists() && uSnap.data().photoURL) {
+                        div.querySelector('.avatar').style.backgroundImage = `url(${uSnap.data().photoURL})`;
+                        div.querySelector('.avatar').innerText = "";
+                    }
+                });
+
+                div.onclick = () => openChat(c.uid, c.name);
+                els.contacts.appendChild(div);
+            });
+        });
+    }
+
+    window.closeChat = () => document.body.classList.remove('chat-open');
+    async function openChat(uid, name) {
+        document.body.classList.add('chat-open');
+        currentChatId = [currentUser.uid, uid].sort().join("_");
+        
+        document.getElementById('noChatStub').style.display = 'none';
+        document.getElementById('chatHeader').style.display = 'flex';
+        els.msgs.style.display = 'flex';
+        document.getElementById('inputBox').style.display = 'flex';
+        document.getElementById('headerName').innerText = name;
+
+        // Фото в шапке
+        const uSnap = await getDoc(doc(db, "users", uid));
+        const headAv = document.getElementById('headerAvatar');
+        if(uSnap.exists() && uSnap.data().photoURL) {
+            headAv.style.backgroundImage = `url(${uSnap.data().photoURL})`;
+            headAv.innerText = "";
+        } else {
+            headAv.style.backgroundImage = "none";
+            headAv.innerText = name[0];
+        }
+
+        if(unsubMsgs) unsubMsgs();
+        const q = query(collection(db, "chats", currentChatId, "messages"), orderBy("time", "asc"));
+        unsubMsgs = onSnapshot(q, snap => {
+            els.msgs.innerHTML = "";
+            snap.docChanges().forEach(change => {
+                if(change.type === "added" && change.doc.data().uid !== currentUser.uid) notifSound.play();
+            });
+
+            snap.forEach(d => {
+                const m = d.data();
+                const isMine = m.uid === currentUser.uid;
+                const div = document.createElement('div');
+                div.className = `msg ${isMine ? 'mine' : 'theirs'}`;
+                
+                // ЛОГИКА АДМИНА: Если я Админ ИЛИ это мое сообщение -> можно удалить
+                if(isMine || isAdmin) {
+                    div.ondblclick = async () => {
+                        if(confirm(isAdmin && !isMine ? "👮 АДМИН: Удалить сообщение этого пользователя?" : "Удалить сообщение?")) {
+                            await deleteDoc(doc(db, "chats", currentChatId, "messages", d.id));
+                        }
+                    };
+                    div.title = "Дважды нажмите для удаления";
+                }
+
+                const time = new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                if(m.type === 'image') div.innerHTML = `<img src="${m.text}" onclick="window.open('${m.text}')">`;
+                else div.innerHTML = makeLinksClickable(m.text);
+
+                div.innerHTML += `<div class="msg-meta">${time} ${isMine ? '<span class="ticks">✓✓</span>' : ''}</div>`;
+                els.msgs.appendChild(div);
+            });
+            els.msgs.scrollTop = els.msgs.scrollHeight;
+        });
+    }
+
+    // === UTILS ===
+    function makeLinksClickable(text) {
+        return text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#027eb5">$1</a>');
+    }
+
+    async function uploadToImgBB(file, callback) {
+        if(!file) return;
+        const fd = new FormData(); fd.append("image", file);
+        try {
+            const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method:"POST", body:fd });
+            const data = await res.json();
+            if(data.success) callback(data.data.url);
+        } catch(e) { alert("Ошибка загрузки фото"); }
+    }
+
+    window.toggleTheme = () => {
+        const body = document.body;
+        if(body.getAttribute('data-theme') === 'dark') body.removeAttribute('data-theme');
+        else body.setAttribute('data-theme', 'dark');
+    };
+
+    // SEND MSG
+    document.getElementById('sendBtn').onclick = sendText;
+    els.inp.onkeypress = (e) => { if(e.key === "Enter") sendText(); };
+    async function sendText() {
+        const txt = els.inp.value.trim();
+        if(!txt || !currentChatId) return;
+        els.inp.value = "";
+        await addDoc(collection(db, "chats", currentChatId, "messages"), { uid: currentUser.uid, text: txt, type: 'text', time: Date.now() });
+    }
+
+    document.getElementById('chatFileInput').onchange = (e) => uploadToImgBB(e.target.files[0], async (url) => {
+        await addDoc(collection(db, "chats", currentChatId, "messages"), { uid: currentUser.uid, text: url, type: 'image', time: Date.now() });
+    });
+</script>
+</body>
+</html>
